@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# Render against the current ML4W wallpaper before each lock.
+set -euo pipefail
+if pidof hyprlock >/dev/null; then exit 0; fi
+python3 "$HOME/.config/hypr/lockscreen/render.py"
+if grep -q 'lockscreen-cover.png' "$HOME/.config/hypr/hyprlock.conf"; then
+  python3 "$HOME/.config/hypr/lockscreen/widget.py" cover >/dev/null
+fi
+exec hyprlock
