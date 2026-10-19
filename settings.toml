@@ -5,34 +5,34 @@
 # below/above/left-of/right-of = place relative to another component ID.
 # offset = [horizontal, vertical] pixels after placement. Change any component's
 # anchor or relative placement independently; no nested components required.
-# enabled=false hides a component and its own content. Dependents must be moved.
+# enabled=false hides only that component; dependents retain its layout guide.
 
 [appearance]
-font = "JetBrains Mono"
+font = "Fira Sans"
 foreground = "#f7f3ee"
 muted = "#dfd8d4"
 accent = "#eab8a4"
 # Soft frosted wallpaper. Raise blur_passes or lower brightness for more contrast.
 blur_passes = 3
 blur_size = 7
-brightness = 0.60
+brightness = 0.80
 # ML4W's current wallpaper is resolved each time the lock launcher runs.
 wallpaper_file = "~/.cache/ml4w/hyprland-dotfiles/current_wallpaper"
 
 [avatar]
 enabled = true
 anchor = "center"
-offset = [0, 0]
-size = [190, 190]
+offset = [0, 23]
+size = [210, 210]
 # Set to your own PNG/JPEG, e.g. ~/.config/hypr/lockscreen/assets/avatar.png
 # Empty path uses a circular initials avatar.
-image = ""
+image = "/home/azhehe/.config/hypr/lockscreen/icon-brave.png"
 initials = "AZ"
 
 [clock]
 enabled = true
 anchor = "top-center"
-offset = [0, 68]
+offset = [0, 86]
 size = [420, 92]
 
 [date]
@@ -44,36 +44,36 @@ size = [460, 35]
 [greeting]
 enabled = true
 anchor = "bottom-center"
-offset = [0, -155]
+offset = [0, -178]
 size = [370, 38]
-name = "Aziz"
+name = "gracie abrams"
 
 [password]
 enabled = true
 below = "greeting"
 offset = [0, 15]
-size = [290, 54]
+size = [366, 64]
 
 [music]
 enabled = true
 anchor = "top-right"
-offset = [-205, 55]
-size = [340, 120]
+offset = [-58, 73]
+size = [498, 184]
 # Example: to put music under clock, remove anchor and use below = "date"
 # with offset = [0, 20].
 
 [weather]
 enabled = true
 below = "music"
-offset = [-88, 14]
-size = [164, 78]
+offset = [-127, 14]
+size = [244, 138]
 # auto: IP geolocation (needs internet); or set city to a city/kabupaten name.
 city = "auto"
 
 [battery]
 enabled = true
 right-of = "weather"
-offset = [12, 0]
-size = [164, 78]
+offset = [10, 0]
+size = [244, 138]
 
 # Setelah update settings, jalankan: python3 ~/.config/hypr/lockscreen/render.py

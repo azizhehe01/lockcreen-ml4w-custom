@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Lockscreen widgets: live MPRIS cover/text, weather and battery state."""
 import json
+import os
 from io import BytesIO
 from pathlib import Path
 import subprocess
@@ -60,14 +61,17 @@ def weather():
                      'Hujan' if code in (51, 53, 55, 61, 63, 65, 80, 81, 82) else
                      'Badai' if code >= 95 else 'Berkabut')
         saved = {'key': key, 'time': time.time(), 'location': clean(location, 22), 'code': code,
-                 'weather': f"{condition} · {round(current['temperature_2m'])}°C"}
+                 'weather': f"{condition} · {round(current['temperature_2m'])}°C",
+                 'weather-temp': f"{round(current['temperature_2m'])}°",
+                 'weather-condition': condition}
         CACHE.parent.mkdir(parents=True, exist_ok=True)
         CACHE.write_text(json.dumps(saved))
         return saved
     except (OSError, ValueError, KeyError, IndexError, TimeoutError):
         if saved.get('key') == key and saved.get('weather'):
             return saved
-        return {'weather': 'Cuaca offline', 'location': 'Cek koneksi', 'code': -1}
+        return {'weather': 'Cuaca offline', 'weather-temp': '--°',
+                'weather-condition': 'Cuaca offline', 'location': 'Cek koneksi', 'code': -1}
 
 
 def weather_icon():
@@ -91,14 +95,29 @@ def battery_state():
 
 def battery():
     pct, status = battery_state()
-    return f"{'+' if status in ('Charging', 'Full') else ''}{pct}%" if pct is not None else 'Tanpa baterai'
+    return f'{pct}%' if pct is not None else '--%'
+
+def battery_status():
+    _, status = battery_state()
+    return {'Charging': 'Mengisi daya', 'Full': 'Penuh',
+            'Discharging': 'Pakai baterai', 'Not charging': 'Tidak mengisi'}.get(status or '', 'Tidak tersedia')
+
+def battery_bar():
+    pct, status = battery_state()
+    if pct is None or status not in ('Charging', 'Full'):
+        return ''
+    filled = max(0, min(10, round(pct / 10)))
+    return '━' * filled + '─' * (10 - filled)
+
+def battery_charge():
+    _, status = battery_state()
+    return 'ϟ' if status == 'Charging' else ''
 
 
 def battery_icon():
     pct, status = battery_state()
     if pct is None: return '○'
-    if status == 'Charging': return 'ϟ'
-    return '▰' if pct >= 60 else '▣' if pct >= 25 else '▱'
+    return '▣'
 
 
 def current_player():
@@ -142,11 +161,13 @@ def fallback_cover():
 
 
 def cover():
-    player = current_player()
+    player = controllable_player()
     url = run(['playerctl', '-p', player, 'metadata', '--format', '{{mpris:artUrl}}']) if player else ''
     previous = COVER_META.read_text() if COVER_META.is_file() else None
     if url == previous and COVER.is_file():
-        return COVER
+        import artwork
+        with Image.open(COVER) as cached:
+            return artwork.save(cached.convert('RGBA'), 'cover')
     image = None
     parsed = urlparse(url)
     try:
@@ -162,7 +183,7 @@ def cover():
         image.thumbnail((240, 240))
         image = image.convert('RGB').resize((160, 160))
         COVER.parent.mkdir(parents=True, exist_ok=True)
-        temp = COVER.with_suffix('.tmp.png')
+        temp = COVER.with_name(f'.{COVER.stem}-{os.getpid()}.tmp.png')
         image.save(temp, format='PNG')
         temp.replace(COVER)
         COVER_META.write_text(url)
@@ -170,27 +191,88 @@ def cover():
         if not COVER.is_file():
             COVER.parent.mkdir(parents=True, exist_ok=True)
             fallback_cover().save(COVER)
-    return COVER
+    import artwork
+    with Image.open(COVER) as cached:
+        return artwork.save(cached.convert('RGBA'), 'cover')
 
 
 def music(kind):
-    player = current_player()
+    player = controllable_player()
     if player:
         fmt = {'music': '{{title}}', 'music-artist': '{{artist}}', 'music-source': '{{playerName}}'}[kind]
-        return clean(run(['playerctl', '-p', player, 'metadata', '--format', fmt]), 22) or 'Musik'
+        limit = 28 if kind == 'music' else 32 if kind == 'music-artist' else 20
+        text = clean(run(['playerctl', '-p', player, 'metadata', '--format', fmt]), limit) or 'Musik'
+        return text.upper() if kind == 'music-source' else text
     return {'music': 'Tidak ada musik', 'music-artist': 'Putar musik', 'music-source': 'MEDIA'}[kind]
+
+def music_progress():
+    player = current_player()
+    if not player:
+        return ''
+    try:
+        position = float(run(['playerctl', '-p', player, 'position']))
+        duration = int(run(['playerctl', '-p', player, 'metadata', '--format', '{{mpris:length}}']))
+        filled = max(0, min(20, round(20 * position * 1_000_000 / duration))) if duration > 0 else 0
+        return '━' * filled + '─' * (20 - filled)
+    except (ValueError, ZeroDivisionError):
+        return ''
+
+
+def progress_fraction():
+    player = controllable_player()
+    if not player:
+        return None
+    try:
+        position = float(run(['playerctl', '-p', player, 'position']))
+        duration = int(run(['playerctl', '-p', player, 'metadata', '--format', '{{mpris:length}}']))
+        return max(0, min(1, position * 1_000_000 / duration)) if duration > 0 else None
+    except (ValueError, ZeroDivisionError):
+        return None
+
+
+def image_widget(kind):
+    import artwork
+    if kind == 'music-progress-image':
+        image = artwork.progress((300, 7), progress_fraction(), '#eab8a4')
+    elif kind == 'battery-bar-image':
+        pct, _ = battery_state()
+        image = artwork.progress((102, 7), pct / 100 if pct is not None else None, '#cdebb5')
+    elif kind == 'battery-image':
+        pct, status = battery_state()
+        image = artwork.icon('offline' if pct is None else 'charging' if status == 'Charging' else 'battery')
+    elif kind == 'weather-image':
+        code = weather().get('code', -1)
+        symbol = ('offline' if code < 0 else 'sun' if code <= 1 else 'cloud' if code <= 3 else
+                  'storm' if code >= 95 else 'rain' if code in (51,53,55,61,63,65,80,81,82) else 'fog')
+        image = artwork.icon(symbol)
+    elif kind == 'play-image':
+        image = artwork.icon('pause' if play_state() == 'Ⅱ' else 'play')
+    else:
+        raise ValueError('unknown image widget')
+    return artwork.save(image, kind)
 
 
 def main():
     kind = sys.argv[1] if len(sys.argv) > 1 else ''
     if kind in ('control-previous', 'control-play-pause', 'control-next'):
         if not control(kind): raise SystemExit(1)
+    elif kind.endswith('-image'): print(image_widget(kind))
     elif kind == 'play-state': print(play_state())
     elif kind == 'cover': print(cover())
     elif kind == 'weather-icon': print(weather_icon())
     elif kind == 'battery-icon': print(battery_icon())
-    elif kind in ('weather', 'location'): print(weather()[kind])
+    elif kind in ('weather', 'weather-temp', 'weather-condition', 'location'):
+        data = weather()
+        if kind == 'weather-temp' and kind not in data:
+            print(data.get('weather', '').rsplit(' · ', 1)[-1].replace('°C', '°'))
+        elif kind == 'weather-condition' and kind not in data:
+            print(data.get('weather', '').split(' · ', 1)[0])
+        else: print(data[kind])
     elif kind == 'battery': print(battery())
+    elif kind == 'battery-status': print(battery_status())
+    elif kind == 'battery-bar': print(battery_bar())
+    elif kind == 'battery-charge': print(battery_charge())
+    elif kind == 'music-progress': print(music_progress())
     elif kind in ('music', 'music-artist', 'music-source'): print(music(kind))
     else: raise SystemExit('unknown widget')
 
