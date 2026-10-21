@@ -232,6 +232,9 @@ def progress_fraction():
 
 def image_widget(kind):
     import artwork
+    if kind == 'music-background-image':
+        import music_background
+        return music_background.current()
     if kind == 'music-progress-image':
         image = artwork.progress((300, 7), progress_fraction(), '#eab8a4')
     elif kind == 'battery-bar-image':

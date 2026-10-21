@@ -1,9 +1,42 @@
 #!/usr/bin/env bash
-# Render against the current ML4W wallpaper before each lock.
+# Keep failures observable; never terminate an existing lock automatically.
 set -euo pipefail
-if pidof hyprlock >/dev/null; then exit 0; fi
-python3 "$HOME/.config/hypr/lockscreen/render.py"
-if grep -q 'lockscreen-cover.png' "$HOME/.config/hypr/hyprlock.conf"; then
-  python3 "$HOME/.config/hypr/lockscreen/widget.py" cover >/dev/null
+state="${XDG_STATE_HOME:-$HOME/.local/state}/hyprlock"
+mkdir -p "$state"
+chmod 700 "$state"
+exec >>"$state/launcher.log" 2>&1
+printf '\n[%s] Lock requested\n' "$(date --iso-8601=seconds)"
+# Serialize simultaneous keyboard/idle requests, not the entire lock lifetime.
+exec 9>"${XDG_RUNTIME_DIR:?}/lockscreen-launch.lock"
+if ! flock -n 9; then
+    printf 'Another launch is preparing the lock\n'
+    exit 0
 fi
-exec hyprlock
+if pids=$(pgrep -u "$(id -u)" -x hyprlock); then
+    printf 'Existing hyprlock PID(s): %s; not starting a duplicate\n' "$pids"
+    notify-send 'Lockscreen sudah berjalan' 'Kalau desktop belum terkunci, proses Hyprlock mungkin tersangkut. Periksa ~/.local/state/hyprlock/launcher.log.' || true
+    exit 0
+fi
+# Retain the last generated config if optional widget preparation is slow/fails.
+if ! timeout --kill-after=1s 4s python3 "$HOME/.config/hypr/lockscreen/render.py"; then
+    printf 'Render failed/timed out; using last generated configuration\n'
+fi
+config="$HOME/.config/hypr/hyprlock.conf"
+if [[ ! -s "$config" ]]; then
+    printf 'ERROR: no usable configuration\n'
+    notify-send -u critical 'Gagal mengunci layar' 'Konfigurasi Hyprlock tidak tersedia.' || true
+    exit 1
+fi
+printf '[%s] Starting hyprlock\n' "$(date --iso-8601=seconds)"
+# Close the launcher mutex in the child; do not leak it to widget commands.
+hyprlock --config "$config" 9>&- &
+pid=$!
+flock -u 9
+exec 9>&-
+status=0
+wait "$pid" || status=$?
+printf '[%s] hyprlock PID %s exited: %s\n' "$(date --iso-8601=seconds)" "$pid" "$status"
+if (( status != 0 )); then
+    notify-send -u critical 'Hyprlock berhenti dengan error' 'Lihat ~/.local/state/hyprlock/launcher.log.' || true
+fi
+exit "$status"

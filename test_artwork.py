@@ -5,10 +5,10 @@ import artwork
 import widget
 
 class ArtworkTests(unittest.TestCase):
-    def test_panel_has_transparent_corners_and_translucent_center(self):
+    def test_panel_has_transparent_corners_and_reference_center(self):
         im = artwork.panel((498,184),28,'#eab8a4')
         self.assertEqual(im.getpixel((0,0))[3],0)
-        self.assertEqual(im.getpixel((249,92))[3],220)
+        self.assertEqual(im.getpixel((249,92)),(29,33,38,255))
     def test_progress_is_continuous_and_clamped(self):
         a=artwork.progress((300,8),0.501,'#eab8a4')
         b=artwork.progress((300,8),0.55,'#eab8a4')

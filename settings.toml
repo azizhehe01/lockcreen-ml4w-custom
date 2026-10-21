@@ -7,11 +7,17 @@
 # anchor or relative placement independently; no nested components required.
 # enabled=false hides only that component; dependents retain its layout guide.
 
+# Shared size for music, weather and battery (including their contents).
+# big = 100%, medium = 80%, small = 65%. Screen-edge margins stay fixed.
+# Component size/offset values below are the base geometry; do not shrink them too.
+[widgets]
+size = "small"
+
 [appearance]
 font = "Fira Sans"
 foreground = "#f7f3ee"
 muted = "#dfd8d4"
-accent = "#eab8a4"
+accent = "#f5c6a7"
 # Soft frosted wallpaper. Raise blur_passes or lower brightness for more contrast.
 blur_passes = 3
 blur_size = 7
@@ -58,7 +64,7 @@ size = [366, 64]
 enabled = true
 anchor = "top-right"
 offset = [-58, 73]
-size = [498, 184]
+size = [498, 498]
 # Example: to put music under clock, remove anchor and use below = "date"
 # with offset = [0, 20].
 

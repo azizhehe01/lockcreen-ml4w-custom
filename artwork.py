@@ -17,7 +17,7 @@ def finish(im,size):
 
 def panel(size,radius,accent):
     im,d=canvas(size)
-    d.rounded_rectangle((0,0,size[0]*S-1,size[1]*S-1),radius*S,fill=(23,28,32,220),outline=accent,width=2*S)
+    d.rounded_rectangle((0,0,size[0]*S-1,size[1]*S-1),radius*S,fill=(29,33,38,255),outline=accent,width=2*S)
     return finish(im,size)
 
 def progress(size,fraction,accent):

@@ -14,6 +14,7 @@ spec.loader.exec_module(module)
 class LayoutRegression(unittest.TestCase):
     def setUp(self):
         self.settings = tomllib.loads((P / 'settings.toml').read_text())
+        self.settings['widgets'] = {'size': 'big'}
         self.wallpaper = Path((Path.home() / '.cache/ml4w/hyprland-dotfiles/current_wallpaper').read_text().strip())
         settings = {k: v.copy() for k, v in self.settings.items()}
         settings['music']['enabled'] = True
@@ -32,10 +33,10 @@ class LayoutRegression(unittest.TestCase):
 
     def test_spacious_music_controls_and_panel_palette(self):
         self.assertEqual(self.conf.count('onclick ='), 3)
-        self.assertIn('size = 184', self.conf)
+        self.assertIn('size = 498', self.conf)
         self.assertIn('size = 138', self.conf)
         self.assertNotIn('color = rgba(171c20e8)', self.conf)
-        self.assertIn('panel-music-', self.conf)
+        self.assertIn('music-background-', self.conf)
         for widget in ('weather-temp', 'weather-condition', 'battery-status', 'battery-bar-image', 'battery-image', 'music-progress-image'):
             self.assertIn('widget.py ' + widget, self.conf)
 
@@ -62,7 +63,7 @@ class LayoutRegression(unittest.TestCase):
         for action in ('previous', 'play-pause', 'next'):
             self.assertTrue(any('onclick = python3 ' in b and 'control-' + action in b for b in labels))
         self.assertIn('font_family = Fira Sans', self.conf)
-        self.assertIn('font_family = JetBrains Mono', self.conf)
+        self.assertIn('font_family = Source Code Pro', self.conf)
 
     def test_control_targets_active_player_without_touching_live_playback(self):
         widget_spec = importlib.util.spec_from_file_location('widget', P / 'widget.py')
@@ -75,7 +76,7 @@ class LayoutRegression(unittest.TestCase):
 
     def test_music_has_reloading_cover_and_icon_widgets(self):
         images = [b for k, b in self.blocks if k == 'image']
-        self.assertTrue(any('widget.py cover' in b and 'reload_time = 10' in b for b in images))
+        self.assertTrue(any('widget.py music-background-image' in b and 'reload_time = 5' in b for b in images))
         self.assertTrue(any('widget.py weather-image' in b for b in images))
         self.assertTrue(any('widget.py battery-image' in b for b in images))
 
@@ -92,7 +93,7 @@ class LayoutRegression(unittest.TestCase):
                 with Image.open(values['path']) as im:
                     self.assertEqual(int(values['size']),min(im.size))
             if 'music-progress-image' in values.get('reload_cmd',''):
-                self.assertEqual(values['size'],'7')
+                self.assertEqual(values['size'],'10')
 
     def test_cycles_rejected_and_all_components_can_be_disabled(self):
         settings = {k:v.copy() for k,v in self.settings.items()}
@@ -106,7 +107,7 @@ class LayoutRegression(unittest.TestCase):
     def test_scaled_render_keeps_native_panels(self):
         for dims in ((1366,768),(2560,1440)):
             conf=module.render(self.settings,dims,self.wallpaper)
-            self.assertIn('panel-music-',conf)
+            self.assertIn('music-background-',conf)
             self.assertIn('control-play-pause',conf)
 
     def test_lighter_regular_typography_preserves_hierarchy(self):
@@ -114,8 +115,8 @@ class LayoutRegression(unittest.TestCase):
                        if ' = ' in line.strip()) for kind, body in self.blocks if kind == 'label']
         clock = next(v for v in labels if 'date +%H:%M' in v['text'])
         self.assertEqual(clock['font_family'], 'Fira Sans')
-        self.assertEqual(clock['font_size'], '102')
-        expected = {'music-source': 10, 'music': 17, 'music-artist': 14,
+        self.assertEqual(clock['font_size'], '77')
+        expected = {'music-source': 11, 'music': 17, 'music-artist': 14,
                     'weather-temp': 28, 'weather-condition': 14, 'location': 14,
                     'battery': 28, 'battery-status': 13}
         for widget, size in expected.items():
@@ -125,16 +126,39 @@ class LayoutRegression(unittest.TestCase):
                 self.assertEqual(label['font_family'], 'Fira Sans')
 
     def test_reference_text_hierarchy_and_brightness(self):
-        self.assertIn('<span size="17000">', next(b for k,b in self.blocks if k == 'input-field'))
+        field = next(b for k,b in self.blocks if k == 'input-field')
+        self.assertIn('outline_thickness = 0', field)
+        self.assertIn('inner_color = rgba(00000000)', field)
+        self.assertIn('placeholder_text = \n', field)
+        self.assertIn('dots_center = true', field)
+        for state in ('check', 'fail', 'capslock', 'numlock', 'bothlock'):
+            self.assertIn(state + '_color = rgba(00000000)', field)
+        self.assertIn('swap_font_color = false', field)
         background = next(b for k,b in self.blocks if k == 'background')
-        self.assertIn('brightness = 0.8', background)
+        self.assertIn('brightness = 1.0', background)
         self.assertIn('contrast = 1.0', background)
         self.assertIn('font_size = 17', next(b for k,b in self.blocks if k == 'label' and 'widget.py music\n' in b))
 
+    def test_measured_reference_foreground_geometry(self):
+        clock = next(b for k,b in self.blocks if k == 'label' and 'date +%H:%M' in b)
+        self.assertIn('position = 0, 408', clock)
+        for token in ('date +"%A', 'Halo,'):
+            body = next(b for k,b in self.blocks if k == 'label' and token in b)
+            self.assertIn('font_family = Source Code Pro', body)
+            self.assertIn('font_size = 20', body)
+        title = next(b for k,b in self.blocks if k == 'label' and 'widget.py music\n' in b)
+        self.assertIn('position = 1397, 113', title)
+        field = next(b for k,b in self.blocks if k == 'input-field')
+        self.assertIn('size = 366, 64', field)
+        self.assertNotIn('font_size =', field)
+        self.assertIn('outer_color = rgba(00000000)', field)
+        self.assertEqual(sum('onclick =' in b for k,b in self.blocks), 3)
+
     def test_wallpaper_blurred_and_dimmed(self):
         background = next(b for k, b in self.blocks if k == 'background')
-        self.assertRegex(background, r'blur_passes = [2-9]')
-        self.assertRegex(background, r'brightness = 0\.[4-8]')
+        self.assertIn('reference-wallpaper.png', background)
+        self.assertIn('blur_passes = 0', background)
+        self.assertIn('brightness = 1.0', background)
 
 
 if __name__ == '__main__':
